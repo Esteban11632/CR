@@ -1,8 +1,6 @@
 import pyautogui
 import os
 import time
-from collections import deque
-import torch
 from paddleocr import PaddleOCR
 import numpy as np
 import cv2
@@ -13,8 +11,15 @@ class actions:
         self.script_dir = os.path.dirname(os.path.abspath(__file__))
         # Go up one directory (from src to CR) then to main_images
         self.images_folder = os.path.join(os.path.dirname(self.script_dir), 'main_images')
-        self.frame_stack = deque(maxlen=4)  # Keep last 4 frames
         self.ocr = PaddleOCR(use_textline_orientation=True, lang='en')
+
+        # Tower healths
+        # 0: left ally tower, 1: right ally tower, 2: left enemy tower, 3: right enemy tower
+        self.tower_healths = [(773, 633, 48, 18), (1062, 633, 48, 18)]
+
+        self.num_cards = 4
+        self.grid_x = 18
+        self.grid_y = 28
         
         self.TOP_LEFT_X = 666
         self.TOP_LEFT_Y = 46
@@ -41,9 +46,6 @@ class actions:
 
         self.current_card_positions = {}
     
-    def reset_frame_stack(self):
-        self.frame_stack.clear()
-
     def capture_area(self, save_path):
         screenshot = pyautogui.screenshot(region=(self.TOP_LEFT_X, self.TOP_LEFT_Y, self.WIDTH, self.HEIGHT))
         screenshot.save(save_path)
@@ -89,13 +91,13 @@ class actions:
         # screenshot = pyautogui.screenshot(region=(773, 633, 48, 18))
 
         # Right ally tower (change x if necessary)
-        screenshot = pyautogui.screenshot(region=(1062, 633, 48, 18))
+        # screenshot = pyautogui.screenshot(region=(1062, 633, 48, 18))
 
         # Left enemy tower (change y if necessary)
-        # screenshot = pyautogui.screenshot(region=(775, 633, 48, 18))
+        # screenshot = pyautogui.screenshot(region=(773, 153, 48, 18))
 
         # Right enemy tower (change x and y if necessary)
-        # screenshot = pyautogui.screenshot(region=(1101, 633, 48, 18))
+        screenshot = pyautogui.screenshot(region=(1062, 153, 48, 18))
 
         screenshot.save(save_path)
 
@@ -109,42 +111,25 @@ class actions:
     
     def get_action(self, action):
 
-        # Get the last element
-        last = action[-1].item()
-        
-        # Remove the last element
-        action_tensor = action[:-1]
-        
-        # Get the value and max index
-        max_value, max_index = action_tensor.max(dim=0)
-        max_value = max_value.item()
-
-        # Reshape the action tensor to 4x28x18
-        action_tensor = action_tensor.reshape(4, 28, 18)
-        
-        # Convert max index to 3D coordinates
-        indices_3d = torch.unravel_index(max_index, action_tensor.shape)
-        action_index = tuple(idx.item() for idx in indices_3d)
-        
-        return action_index, last, max_value
+        if action == 0:
+        # Special case: do nothing
+            return None, None, None
     
-    def get_tower_health(self):
-        """parent_dir = os.path.dirname(os.path.dirname(__file__))
-        screenshot_dir = os.path.join(parent_dir, 'screenshots')
-        tower_path = os.path.join(screenshot_dir, 'demo3.png')"""
+        # Subtract 1 to account for "do nothing" action
+        action_idx = action - 1
+        
+        # Decode to 3D coordinates
+        card = action_idx // (self.grid_x * self.grid_y)  # Which card (0-3)
+        remainder = action_idx % (self.grid_x * self.grid_y)
+        x = remainder // self.grid_y  # X position (0-17)
+        y = remainder % self.grid_y   # Y position (0-27)
+        
+        return card, x, y
+    
+    def get_tower_health(self, region):
 
-
-        # Left ally tower
-        tower = pyautogui.screenshot(region=(773, 633, 48, 18))
-
-        # Right ally tower (change x if necessary)
-        # tower = pyautogui.screenshot(region=(1062, 633, 48, 18))
-
-        # Left enemy tower (change y if necessary)
-        # tower = pyautogui.screenshot(region=(775, 633, 48, 18))
-
-        # Right enemy tower (change x and y if necessary)
-        # tower = pyautogui.screenshot(region=(1101, 633, 48, 18))
+        # Get the tower screenshot
+        tower = pyautogui.screenshot(region=region)
         tower = np.array(tower)
         
         # Convert to grayscale
@@ -159,11 +144,17 @@ class actions:
         # Convert back to 3-channel BGR (numbers are now black)
         tower_rgb = cv2.cvtColor(tower_bw, cv2.COLOR_GRAY2BGR)
 
+        # Show the tower screenshot
         img = Image.fromarray(tower_rgb)
         img.show()
-        
+
+        # Get the tower health
         pred = self.ocr.predict(tower_rgb)
         tower_health = pred[0]['rec_texts'][0] if pred and len(pred[0]['rec_texts']) > 0 else "No text"
+        if pred and len(pred[0]['rec_texts']) > 0 and tower_health.isnumeric():
+            tower_health = int(tower_health)
+        else:
+            tower_health = "No text"
         return tower_health
     
     def capture_card_area(self, save_path):
@@ -345,7 +336,13 @@ os.makedirs(screenshot_dir, exist_ok=True)
 # print(actions().detect_game_end())
 # print(actions().grid_to_pixel(0, 1)) # rows, cols
 
-action = actions()
-while True:
-    print(action.get_tower_health())
-    time.sleep(0.5)
+# tower_pixel_positions = [(773, 633, 48, 18), (1061, 633, 48, 18), (773, 153, 48, 18), (1061, 153, 48, 18)] # left ally tower, right ally tower, left enemy tower, right enemy tower
+
+# action = actions()
+"""for i in tower_pixel_positions:
+    print(f"Tower {i} health:")
+    print(action.get_tower_health(i))
+    time.sleep(0.5)"""
+
+# while True:
+#     print(action.get_tower_health(tower_pixel_positions[0]))

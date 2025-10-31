@@ -1,8 +1,9 @@
 import torch
 import torch.nn as nn
 from torchinfo import summary
+from torch.distributions import Categorical
 
-class ClashRoyaleModel(nn.Module):
+class FeatureExtractor(nn.Module):
     def __init__(self, num_actions = 4*18*28 + 1): # num actions = 4 cards, 18x28 grid
         super().__init__()
 
@@ -59,12 +60,50 @@ class ClashRoyaleModel(nn.Module):
         combined = torch.cat([x, e, c], dim=1)
         
         # Fully connected layers
-        result = torch.relu(self.fc1(combined))
-        result = self.fc2(result)
-        return result
+        features = torch.relu(self.fc1(combined))
+        return features
+
+
+class ActorNetwork(nn.Module):
+    def __init__(self, num_actions=4*18*28 + 1):
+        super().__init__()
+        self.features = FeatureExtractor()
+        self.action_head = nn.Linear(256, num_actions)
+    
+    def forward(self, battlefield, elixir, cards):
+        features = self.features(battlefield, elixir, cards)
+        return self.action_head(features)
+    
+    def get_action(self, battlefield, elixir, cards):
+
+        # Forward pass
+        logits = self.forward(battlefield, elixir, cards)
+
+        # Apply softmax to get probabilities
+        dist = Categorical(logits=logits)
+
+        # Sample an action from the distribution
+        action = dist.sample()
+
+        # Calculate the log probability of the action
+        log_prob = dist.log_prob(action)
+
+
+        return action.item(), log_prob
+
+
+class CriticNetwork(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.features = FeatureExtractor()
+        self.value_head = nn.Linear(256, 1)
+    
+    def forward(self, battlefield, elixir, cards):
+        features = self.features(battlefield, elixir, cards)
+        return self.value_head(features)
 
 # Usage
-model = ClashRoyaleModel()
+model = ActorNetwork()
 # battlefield = torch.tensor(battlefield_state)  # [batch, 3, 28, 18]
 # elixir = torch.tensor([0.7])  # [batch]
 
@@ -78,3 +117,53 @@ summary(
     ],
     device="cpu"
 )
+
+"""
+# Week 1: Get PPO working
+class SimpleActor(nn.Module):
+    def __init__(self, num_actions=2017):
+        super().__init__()
+        input_size = 3 * 28 * 18 + 1 + 8  # 1521
+        self.network = nn.Sequential(
+            nn.Linear(input_size, 256),
+            nn.ReLU(),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, num_actions)
+        )
+    
+    def forward(self, battlefield, elixir, cards):
+        flat = torch.cat([
+            battlefield.flatten(start_dim=1),
+            elixir.view(-1, 1),
+            cards.view(-1, 8)
+        ], dim=1)
+        return self.network(flat)
+
+class SimpleCritic(nn.Module):
+    def __init__(self):
+        super().__init__()
+        input_size = 3 * 28 * 18 + 1 + 8  # 1521
+        self.network = nn.Sequential(
+            nn.Linear(input_size, 256),
+            nn.ReLU(),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, 1)
+        )
+    
+    def forward(self, battlefield, elixir, cards):
+        flat = torch.cat([
+            battlefield.flatten(start_dim=1),
+            elixir.view(-1, 1),
+            cards.view(-1, 8)
+        ], dim=1)
+        return self.network(flat)
+
+# Goals:
+# - Agent learns to place cards
+# - Agent learns basic elixir management
+# - PPO training loop works
+
+# If this succeeds, THEN upgrade to your CNN
+"""

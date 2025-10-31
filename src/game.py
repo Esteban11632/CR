@@ -16,6 +16,10 @@ class Game:
         self.troops_dir = os.path.join(self.parent_dir, 'troops')
         os.makedirs(self.screenshot_dir, exist_ok=True)
 
+        # Tower positions
+        self.tower_pixel_positions = [(773, 633, 48, 18), (1061, 633, 48, 18), (773, 153, 48, 18), (1061, 153, 48, 18)] # left ally tower, right ally tower, left enemy tower, right enemy tower
+        self.tower_grid_positions = [(22, 3), (22, 14), (5, 3), (5, 14)] # left ally tower, right ally tower, left enemy tower, right enemy tower
+
         self.rf_model = self.__setup_roboflow()
         self.card_model = self.__setup_card_roboflow()
     
@@ -37,32 +41,45 @@ class Game:
 
     def play_step(self, action):
         # Get the action from the model
-        action_index, last, action_value = self.actions.get_action(action)
+        card, x, y = self.actions.get_action(action)
 
         # If the action value is greater than the last, play the card
-        if action_value > last:
-            x, y = self.actions.grid_to_pixel(action_index[1], action_index[2])
-            self.actions.card_play(x, y, action_index[0])
+        if card != None:
+            x, y = self.actions.grid_to_pixel(x, y)
+            self.actions.card_play(x, y, card)
     
     def compute_reward(self, old_state, new_state):
 
         # Get the tower health
 
-        reward = 0
+        reward = 0.0
+
+        # Count enemies killed
+        old_enemy_count = torch.count_nonzero(old_state[1:])
+        new_enemy_count = torch.count_nonzero(new_state[1:])
+        enemy_killed = old_enemy_count - new_enemy_count
+        if enemy_killed > 0:
+            reward += enemy_killed * 0.1
         
-        old_num_enemies = 0
-        new_num_enemies = 0
-        for i in range(len(old_state[1])):
-            for j in range(len(old_state[1][i])):
-                if old_state[1][i][j] != 0:
-                    old_num_enemies += 1
-        for i in range(len(new_state[1])):
-            for j in range(len(new_state[1][i])):
-                if new_state[1][i][j] != 0:
-                    new_num_enemies += 1
-        if new_num_enemies < old_num_enemies:
-            reward += 2
-        pass
+        # Get old tower health
+        old_ally_tower_health = (old_state[2][22][3] * 1000) + (old_state[2][22][14] * 1000) # left ally tower health + right ally tower health
+        old_enemy_tower_health = (old_state[2][5][3] * 1000) + (old_state[2][5][14] * 1000) # left enemy tower health + right enemy tower health
+        
+        # Get new tower health
+        new_ally_tower_health = (new_state[2][22][3] * 1000) + (new_state[2][22][14] * 1000) # left ally tower health + right ally tower health
+        new_enemy_tower_health = (new_state[2][5][3] * 1000) + (new_state[2][5][14] * 1000) # left enemy tower health + right enemy tower health
+        
+        # Get tower health change
+        ally_tower_health_change = old_ally_tower_health - new_ally_tower_health
+        enemy_tower_health_change = old_enemy_tower_health - new_enemy_tower_health
+        if ally_tower_health_change > 0:
+            reward += ally_tower_health_change * 0.2
+        if enemy_tower_health_change > 0:
+            reward -= enemy_tower_health_change * 0.2
+
+        # Get if victory or defeat
+
+        return reward
 
     def get_state(self):
 
@@ -71,6 +88,18 @@ class Game:
         # Grid 18x28
         # 0: friendly, 1: enemy, 2: towers
         battlefield = np.zeros((3, 28, 18), dtype=np.int32)
+
+        # Get number of enemies
+        self.actions.capture_area(os.path.join(self.screenshot_dir, "enemies.png"))
+
+        # Get number of allies
+        self.actions.capture_area(os.path.join(self.screenshot_dir, "allies.png"))
+
+        # Get tower health
+        for i in range(4):
+            tower_health = self.actions.get_tower_health(self.tower_pixel_positions[i])
+            if tower_health != "No text" and tower_health < 4500:
+                battlefield[2][self.tower_grid_positions[i][0]][self.tower_grid_positions[i][1]] = tower_health / 1000
 
         # Identify troops and locations in grid with roboflow
 
@@ -95,4 +124,4 @@ x = torch.zeros(2017)
 x[18] = 20
 x[2016] = 10
 
-Game().play_step(x)
+Game().play_step(18)
