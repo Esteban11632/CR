@@ -8,7 +8,6 @@ import torch
 
 class Game:
     def __init__(self):
-        self.frame_stack = deque(maxlen=4)
         self.actions = actions()
 
         self.parent_dir = os.path.dirname(os.path.dirname(__file__))
@@ -29,17 +28,14 @@ class Game:
     def __setup_card_roboflow(self):
         pass
 
-    def get_frames(self):
-        for i in range(4):
-            screenshot = self.actions.capture_area(os.path.join(self.screenshot_dir, f"frame_{i}.png"))
-            self.frame_stack.append(screenshot)
-            time.sleep(0.5)
-            print(f"Frame {i} captured")
-    
-    def get_frame_stack(self):
-        return self.frame_stack
+    def reset(self):
+        self.actions.play_again()
+        time.sleep(6)
 
-    def play_step(self, action):
+        # Return initial state
+        return self.get_state()
+    
+    def step(self, action, state):
         # Get the action from the model
         card, x, y = self.actions.get_action(action)
 
@@ -47,16 +43,25 @@ class Game:
         if card != None:
             x, y = self.actions.grid_to_pixel(x, y)
             self.actions.card_play(x, y, card)
+
+        # Wait for the card to be played
+        time.sleep(1)
+        
+        # Get the new state
+        new_state = self.get_state()
+        
+        # Compute the reward
+        reward, done = self.compute_reward(state["battlefield"], new_state["battlefield"])
+        return new_state, reward, done
     
     def compute_reward(self, old_state, new_state):
 
         # Get the tower health
-
         reward = 0.0
 
         # Count enemies killed
-        old_enemy_count = torch.count_nonzero(old_state[1:])
-        new_enemy_count = torch.count_nonzero(new_state[1:])
+        old_enemy_count = np.count_nonzero(old_state[1])
+        new_enemy_count = np.count_nonzero(new_state[1])
         enemy_killed = old_enemy_count - new_enemy_count
         if enemy_killed > 0:
             reward += enemy_killed * 0.1
@@ -73,13 +78,18 @@ class Game:
         ally_tower_health_change = old_ally_tower_health - new_ally_tower_health
         enemy_tower_health_change = old_enemy_tower_health - new_enemy_tower_health
         if ally_tower_health_change > 0:
-            reward += ally_tower_health_change * 0.2
+            reward -= ally_tower_health_change * 0.2
         if enemy_tower_health_change > 0:
-            reward -= enemy_tower_health_change * 0.2
+            reward += enemy_tower_health_change * 0.2
 
         # Get if victory or defeat
+        result, done = self.actions.detect_game_end()
+        if result == "victory":
+            reward += 100
+        elif result == "defeat":
+            reward -= 100
 
-        return reward
+        return reward, done
 
     def get_state(self):
 
@@ -117,11 +127,15 @@ class Game:
         # Then convert it to an array of 8 values
         # Normalize the values to be between 0 and 1 -> id / 100 and elixir / 10
         # return the state
-        # return battlefield, elixir, cards
-        pass
+        """state = {
+            'battlefield': battlefield,
+            'elixir': elixir,
+            'cards': cards
+        }"""
+        # return state
 
-x = torch.zeros(2017)
+"""x = torch.zeros(2017)
 x[18] = 20
 x[2016] = 10
 
-Game().play_step(18)
+Game().play_step(18)"""

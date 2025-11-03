@@ -278,46 +278,48 @@ class actions:
                 print(f"Error locating OK button: {str(e)}")
         
     def detect_game_end(self):
-        try:
-            winner_img = os.path.join(self.images_folder, "Winner.png")
-            print(f"\nLooking for Winner.png at: {winner_img}")
-            if os.path.exists(winner_img):
-                print("File found!")
-            else:
-                print("File not found! Check the path.")
-            confidences = [0.8, 0.7, 0.6] # 80%, 70%, 60% confidence levels
+        done = 0
+        winner_img = os.path.join(self.images_folder, "Winner.png")
+        print(f"\nLooking for Winner.png at: {winner_img}")
+        if os.path.exists(winner_img):
+            print("File found!")
+        else:
+            print("File not found! Check the path.")
+        confidences = [0.8, 0.7, 0.6] # 80%, 70%, 60% confidence levels
 
-            # Region of the two opponent names and the winner text
-            winner_region = (666, 46, 544, 700)
+        # Region of the two opponent names and the winner text
+        winner_region = (666, 46, 544, 700)
 
-            for confidence in confidences:
-                print(f"\nTrying detection with confidence: {confidence}")
-                winner_location = None
+        for confidence in confidences:
+            print(f"\nTrying detection with confidence: {confidence}")
+            winner_location = None
 
-                # Try to find Winner in region
-                try:
-                    winner_location = pyautogui.locateOnScreen(
-                        winner_img, 
-                        confidence=confidence, # Try 80%, 70%, 60% confidence levels
-                        grayscale=True, 
-                        region=winner_region
-                    )
-                except Exception as e:
-                    print(f"Error locating Winner: {str(e)}")
+            # Try to find Winner in region
+            try:
+                winner_location = pyautogui.locateOnScreen(
+                    winner_img, 
+                    confidence=confidence, # Try 80%, 70%, 60% confidence levels
+                    grayscale=True, 
+                    region=winner_region
+                )
+            except Exception as e:
+                print(f"Error locating Winner: {str(e)}")
 
-                if winner_location:
-                    _, y = pyautogui.center(winner_location)
-                    print(f"Found 'Winner' at y={y} with confidence {confidence}")
-                    result = "victory" if y > 350 else "defeat"
-                    time.sleep(3)
-                    # Click the "Play Again" button
-                    self.__return_to_menu()
-                    time.sleep(6)
-                    self.__click_battle_start()
-                    return result
-        except Exception as e:
-            print(f"Error in game end detection: {str(e)}")
-        return None
+            if winner_location:
+                _, y = pyautogui.center(winner_location)
+                print(f"Found 'Winner' at y={y} with confidence {confidence}")
+                result = "victory" if y > 350 else "defeat"
+                done = 1
+                return result, done
+        return None, done
+    
+    def play_again(self):
+        print("Playing again")
+        # Click the "Play Again" button
+        self.__return_to_menu()
+        time.sleep(6)
+        self.__click_battle_start()
+        
 
 # Get parent directory (one level up from src)
 parent_dir = os.path.dirname(os.path.dirname(__file__))
