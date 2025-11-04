@@ -278,7 +278,7 @@ class actions:
                 print(f"Error locating OK button: {str(e)}")
         
     def detect_game_end(self):
-        done = 0
+        done = False
         winner_img = os.path.join(self.images_folder, "Winner.png")
         print(f"\nLooking for Winner.png at: {winner_img}")
         if os.path.exists(winner_img):
@@ -309,7 +309,7 @@ class actions:
                 _, y = pyautogui.center(winner_location)
                 print(f"Found 'Winner' at y={y} with confidence {confidence}")
                 result = "victory" if y > 350 else "defeat"
-                done = 1
+                done = True
                 return result, done
         return None, done
     

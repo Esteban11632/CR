@@ -141,14 +141,12 @@ class CriticNetwork(nn.Module):
 class Agent():
     def __init__(self, n_actions, gamma = 0.99, alpha = 0.0003, gae_lambda = 0.95, policy_clip = 0.2, batch_size = 64, n_epochs = 10):
         self.gamma = gamma
-        self.alpha = alpha
         self.gae_lambda = gae_lambda
-        self.policy_clip = policy_clip
-        self.batch_size = batch_size
         self.n_epochs = n_epochs
+        self.policy_clip = policy_clip
         
-        self.actor = ActorNetwork(num_actions=n_actions)
-        self.critic = CriticNetwork()
+        self.actor = ActorNetwork(num_actions=n_actions, alpha=alpha)
+        self.critic = CriticNetwork(alpha=alpha)
         self.memory = PPOMemory(batch_size)
     
     def remember(self, state, action, probs, vals, reward, done):
@@ -187,7 +185,7 @@ class Agent():
         return None
     
     def choose_action(self, battlefield, elixir, cards):
-        with torch.no_grad():  # ← Add this
+        with torch.no_grad():
             # Convert to tensors and add a batch dimension
             battlefield = torch.tensor([battlefield], dtype=torch.float).to(self.actor.device)
             elixir = torch.tensor([elixir], dtype=torch.float).to(self.actor.device)
@@ -256,7 +254,7 @@ class Agent():
                 actor_loss = -torch.min(weighted_probs, weighted_clipped_probs).mean()
 
                 returns = advantage[batch] + values[batch]
-                critic_loss = (returns-critic_value)**2
+                critic_loss = (returns - critic_value)**2
                 critic_loss = critic_loss.mean()
 
                 total_loss = actor_loss + 0.5 * critic_loss

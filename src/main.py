@@ -49,13 +49,14 @@ if __name__ == '__main__':
             if n_steps % N == 0:
                 agent.learn()
                 learn_iters += 1
+                start_episode += 1
             state = new_state
         score_history.append(score)
         avg_score = np.mean(score_history[-100:])
 
         if avg_score > best_score:
             best_score = avg_score
-            agent.save_models()
+            agent.save_models(best_score=best_score, episode=start_episode)
 
         print('episode', i, 'score %.1f' % score, 'avg score %.1f' % avg_score,
                 'time_steps', n_steps, 'learning_steps', learn_iters)
