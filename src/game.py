@@ -1,10 +1,7 @@
-from collections import deque
 import time
 from funcs import actions
 import os
 import numpy as np
-from troop_cards import cards
-import torch
 
 class Game:
     def __init__(self):
@@ -19,21 +16,17 @@ class Game:
         self.tower_pixel_positions = [(773, 633, 48, 18), (1061, 633, 48, 18), (773, 153, 48, 18), (1061, 153, 48, 18)] # left ally tower, right ally tower, left enemy tower, right enemy tower
         self.tower_grid_positions = [(22, 3), (22, 14), (5, 3), (5, 14)] # left ally tower, right ally tower, left enemy tower, right enemy tower
 
-        self.rf_model = self.__setup_roboflow()
-        self.card_model = self.__setup_card_roboflow()
-    
-    def __setup_roboflow(self):
-        pass
-
-    def __setup_card_roboflow(self):
-        pass
-
     def reset(self):
-        self.actions.play_again()
-        time.sleep(6)
+        self.actions.click_battle_start()
+        time.sleep(7.5)
 
         # Return initial state
         return self.get_state()
+    
+    def exit(self):
+        self.actions.return_to_menu()
+        time.sleep(6)
+        print("Exited")
     
     def step(self, action, state):
         # Get the action from the model
@@ -67,12 +60,12 @@ class Game:
             reward += enemy_killed * 0.1
         
         # Get old tower health
-        old_ally_tower_health = (old_state[2][22][3] * 1000) + (old_state[2][22][14] * 1000) # left ally tower health + right ally tower health
-        old_enemy_tower_health = (old_state[2][5][3] * 1000) + (old_state[2][5][14] * 1000) # left enemy tower health + right enemy tower health
+        old_ally_tower_health = (old_state[2][22][3] * 10000) + (old_state[2][22][14] * 10000) # left ally tower health + right ally tower health
+        old_enemy_tower_health = (old_state[2][5][3] * 10000) + (old_state[2][5][14] * 10000) # left enemy tower health + right enemy tower health
         
         # Get new tower health
-        new_ally_tower_health = (new_state[2][22][3] * 1000) + (new_state[2][22][14] * 1000) # left ally tower health + right ally tower health
-        new_enemy_tower_health = (new_state[2][5][3] * 1000) + (new_state[2][5][14] * 1000) # left enemy tower health + right enemy tower health
+        new_ally_tower_health = (new_state[2][22][3] * 10000) + (new_state[2][22][14] * 10000) # left ally tower health + right ally tower health
+        new_enemy_tower_health = (new_state[2][5][3] * 10000) + (new_state[2][5][14] * 10000) # left enemy tower health + right enemy tower health
         
         # Get tower health change
         ally_tower_health_change = old_ally_tower_health - new_ally_tower_health
@@ -109,7 +102,7 @@ class Game:
         for i in range(4):
             tower_health = self.actions.get_tower_health(self.tower_pixel_positions[i])
             if tower_health != "No text" and tower_health < 4500:
-                battlefield[2][self.tower_grid_positions[i][0]][self.tower_grid_positions[i][1]] = tower_health / 1000
+                battlefield[2][self.tower_grid_positions[i][0]][self.tower_grid_positions[i][1]] = tower_health / 10000
 
         # Identify troops and locations in grid with roboflow
 
@@ -130,7 +123,7 @@ class Game:
         """state = {
             'battlefield': battlefield,
             'elixir': elixir,
-            'cards': cards
+            'cards': current_cards
         }"""
         # return state
 

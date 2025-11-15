@@ -1,12 +1,13 @@
 import torch
 import torch.nn as nn
-from torchinfo import summary
+# from torchinfo import summary
 from torch.distributions import Categorical
 import torch.optim as optim
 import os
 from PPOMemory import PPOMemory
 import numpy as np
 import json
+from utils import check_gradient_flow
 
 class FeatureExtractor(nn.Module):
     def __init__(self, alpha = 0.001): # num actions = 4 cards, 18x28 grid
@@ -14,7 +15,7 @@ class FeatureExtractor(nn.Module):
 
         self.sequential1 = nn.Sequential(
             nn.Conv2d(3, 32, kernel_size=3, padding=1), # output [batch, 32, 28, 18]
-            nn.ReLU(),
+            nn.ReLU(), # or nn.LeakyReLU(0.01) to prevent dying gradients
             nn.Conv2d(32, 64, kernel_size=3, padding=1), # output [batch, 64, 28, 18]
             nn.ReLU(),
             nn.MaxPool2d(2, 2) # output [batch, 64, 14, 9]
@@ -187,9 +188,9 @@ class Agent():
     def choose_action(self, battlefield, elixir, cards):
         with torch.no_grad():
             # Convert to tensors and add a batch dimension
-            battlefield = torch.tensor([battlefield], dtype=torch.float).to(self.actor.device)
-            elixir = torch.tensor([elixir], dtype=torch.float).to(self.actor.device)
-            cards = torch.tensor([cards], dtype=torch.float).to(self.actor.device)
+            battlefield = torch.tensor([battlefield], dtype=torch.float32).to(self.actor.device)
+            elixir = torch.tensor([elixir], dtype=torch.float32).to(self.actor.device)
+            cards = torch.tensor([cards], dtype=torch.float32).to(self.actor.device)
 
             # Forward pass
             dist = self.actor(battlefield, elixir, cards)
@@ -226,17 +227,17 @@ class Agent():
                 # Convert each component to tensor
                 battlefields = torch.tensor(
                     np.array([s['battlefield'] for s in batch_states]), 
-                    dtype=torch.float
+                    dtype=torch.float32
                 ).to(self.actor.device)
                 
                 elixirs = torch.tensor(
                     np.array([s['elixir'] for s in batch_states]), 
-                    dtype=torch.float
+                    dtype=torch.float32
                 ).to(self.actor.device)
                 
                 cards = torch.tensor(
                     np.array([s['cards'] for s in batch_states]), 
-                    dtype=torch.float
+                    dtype=torch.float32
                 ).to(self.actor.device)
                 old_probs = torch.tensor(old_prob_arr[batch]).to(self.actor.device)
                 actions = torch.tensor(action_arr[batch]).to(self.actor.device)
@@ -261,6 +262,14 @@ class Agent():
                 self.actor.optimizer.zero_grad()
                 self.critic.optimizer.zero_grad()
                 total_loss.backward()
+
+                # Check gradient flow periodically
+                if _ == 0 and len(batches) > 0:  # Only first epoch, first batch
+                    print(f"\nChecking Actor network:")
+                    check_gradient_flow(self.actor)
+                    print(f"\nChecking Critic network:")
+                    check_gradient_flow(self.critic)
+                
                 self.actor.optimizer.step()
                 self.critic.optimizer.step()
 

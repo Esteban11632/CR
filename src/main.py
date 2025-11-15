@@ -51,6 +51,7 @@ if __name__ == '__main__':
                 learn_iters += 1
                 start_episode += 1
             state = new_state
+        env.exit()
         score_history.append(score)
         avg_score = np.mean(score_history[-100:])
 

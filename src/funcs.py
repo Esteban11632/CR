@@ -4,18 +4,31 @@ import time
 from paddleocr import PaddleOCR
 import numpy as np
 import cv2
-from PIL import Image
+from fastai.vision.all import *
+import pathlib
+import platform
+from troop_cards import cards
+
+# CRITICAL: Force CPU-only mode for PaddleOCR to prevent CUDA conflicts with PyTorch
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
 class actions:
     def __init__(self):
-        self.script_dir = os.path.dirname(os.path.abspath(__file__))
+        self.parent_dir = os.path.dirname(os.path.dirname(__file__))
         # Go up one directory (from src to CR) then to main_images
-        self.images_folder = os.path.join(os.path.dirname(self.script_dir), 'main_images')
-        self.ocr = PaddleOCR(use_textline_orientation=True, lang='en')
+        self.images_folder = os.path.join(self.parent_dir, 'main_images')
+        print(self.images_folder)
 
-        # Tower healths
-        # 0: left ally tower, 1: right ally tower, 2: left enemy tower, 3: right enemy tower
-        self.tower_healths = [(773, 633, 48, 18), (1062, 633, 48, 18)]
+        self.models_dir = os.path.join(self.parent_dir, 'models')
+        self.card_model_path = os.path.join(self.models_dir, 'card_model.pkl')
+        
+        # Simplest/fastest config for reading tower health numbers
+        """self.ocr = PaddleOCR(
+            use_doc_orientation_classify=False,
+            use_doc_unwarping=False,
+            use_textline_orientation=False,
+            lang='en'
+        )"""
 
         self.num_cards = 4
         self.grid_x = 18
@@ -45,6 +58,32 @@ class actions:
         }
 
         self.current_card_positions = {}
+
+        self.rf_model = self.__setup_roboflow()
+        self.card_model = self.__setup_card_roboflow()
+    
+    def __setup_roboflow(self):
+        pass
+
+    def __setup_card_roboflow(self):
+        # Fix for Windows/Linux path compatibility
+        if platform.system() == 'Windows':
+            temp = pathlib.PosixPath
+            pathlib.PosixPath = pathlib.WindowsPath
+
+        # Restore PosixPath
+        try:
+
+            # Load model
+            learn = load_learner(self.card_model_path)
+            
+        finally:
+            # Always restore, even if loading fails
+            if platform.system() == 'Windows':
+                pathlib.PosixPath = temp
+
+        # Return the model
+        return learn
     
     def capture_area(self, save_path):
         screenshot = pyautogui.screenshot(region=(self.TOP_LEFT_X, self.TOP_LEFT_Y, self.WIDTH, self.HEIGHT))
@@ -91,13 +130,13 @@ class actions:
         # screenshot = pyautogui.screenshot(region=(773, 633, 48, 18))
 
         # Right ally tower (change x if necessary)
-        # screenshot = pyautogui.screenshot(region=(1062, 633, 48, 18))
+        # screenshot = pyautogui.screenshot(region=(1061, 633, 48, 18))
 
         # Left enemy tower (change y if necessary)
         # screenshot = pyautogui.screenshot(region=(773, 153, 48, 18))
 
         # Right enemy tower (change x and y if necessary)
-        screenshot = pyautogui.screenshot(region=(1062, 153, 48, 18))
+        screenshot = pyautogui.screenshot(region=(1061, 153, 48, 18))
 
         screenshot.save(save_path)
 
@@ -145,8 +184,8 @@ class actions:
         tower_rgb = cv2.cvtColor(tower_bw, cv2.COLOR_GRAY2BGR)
 
         # Show the tower screenshot
-        img = Image.fromarray(tower_rgb)
-        img.show()
+        # img = Image.fromarray(tower_rgb)
+        # img.show()
 
         # Get the tower health
         pred = self.ocr.predict(tower_rgb)
@@ -178,17 +217,41 @@ class actions:
         
         # Calculate individual card widths
         card_width = self.CARD_BAR_WIDTH // 4
-        cards = []
+        current_cards = np.zeros(8, dtype=np.float32)
         
         # Split into 4 individual card images
         for i in range(4):
             left = i * card_width
             card_img = screenshot.crop((left, 0, left + card_width, self.CARD_BAR_HEIGHT))
-            save_path = os.path.join(os.path.dirname(self.script_dir), 'screenshots', f"card_{i+1}.png")
+            """save_path = os.path.join(os.path.dirname(self.script_dir), 'screenshots', f"card_{i+1}.png")
             card_img.save(save_path)
-            cards.append(save_path)
+            cards.append(save_path)"""
+
+            # Make the card image grayscale and then back to BGR
+            card_img = cv2.cvtColor(np.array(card_img), cv2.COLOR_BGR2GRAY)
+            card_img = cv2.cvtColor(card_img, cv2.COLOR_GRAY2BGR)
+
+            # Make the prediction
+            pred_class, pred_idx, probs = self.card_model.predict(card_img)
+            print(f"Predicted: {pred_class}")
+            print(f"Confidence: {probs[pred_idx]*100:.2f}%")
+
+            # Parse the prediction
+            try:
+                if pred_class in cards:
+                    current_cards[i * 2] = cards[pred_class]['id'] / 110.0  # Normalize by max_id + 1
+                    current_cards[i * 2 + 1] = cards[pred_class]['cost'] / 10.0  # Max cost is 9
+                else:
+                    print(f"Warning: Card '{pred_class}' not found in dictionary!")
+                    # Set to 0 or some default values
+                    current_cards[i * 2] = 0.0
+                    current_cards[i * 2 + 1] = 0.0
+            except Exception as e:
+                print(f"Error processing card {i}: {e}")
+                current_cards[i * 2] = 0.0
+                current_cards[i * 2 + 1] = 0.0
         
-        return cards
+        return current_cards
     
     def count_elixir(self):
         # Elixir RGB values
@@ -235,14 +298,13 @@ class actions:
         else:
             print(f"Invalid card index: {card_index}")
     
-    def __click_battle_start(self):
+    def click_battle_start(self):
         print("Clicking battle start")
         pyautogui.moveTo(930, 800, duration=0.2)
         pyautogui.click()
-        time.sleep(1)
         print("Battle started")
 
-    def __return_to_menu(self):
+    def return_to_menu(self):
         print("Returning to menu")
         # Locate the ok button
         ok_img = os.path.join(self.images_folder, "okbutton.png")
@@ -312,13 +374,6 @@ class actions:
                 done = True
                 return result, done
         return None, done
-    
-    def play_again(self):
-        print("Playing again")
-        # Click the "Play Again" button
-        self.__return_to_menu()
-        time.sleep(6)
-        self.__click_battle_start()
         
 
 # Get parent directory (one level up from src)
@@ -338,13 +393,14 @@ os.makedirs(screenshot_dir, exist_ok=True)
 # print(actions().detect_game_end())
 # print(actions().grid_to_pixel(0, 1)) # rows, cols
 
-# tower_pixel_positions = [(773, 633, 48, 18), (1061, 633, 48, 18), (773, 153, 48, 18), (1061, 153, 48, 18)] # left ally tower, right ally tower, left enemy tower, right enemy tower
+"""tower_pixel_positions = [(773, 633, 48, 18), (1061, 633, 48, 18), (773, 153, 48, 18), (1061, 153, 48, 18)] # left ally tower, right ally tower, left enemy tower, right enemy tower
 
-# action = actions()
-"""for i in tower_pixel_positions:
+action = actions()
+for i in tower_pixel_positions:
     print(f"Tower {i} health:")
-    print(action.get_tower_health(i))
-    time.sleep(0.5)"""
+    print(action.get_tower_health(i))"""
 
 # while True:
 #     print(action.get_tower_health(tower_pixel_positions[0]))
+cards = actions().capture_individual_cards()
+print(cards)
