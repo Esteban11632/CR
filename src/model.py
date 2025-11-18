@@ -220,7 +220,11 @@ class Agent():
                 advantage[t] = a_t
             advantage = torch.tensor(advantage).to(self.actor.device)
 
+            # Normalize advantages (IMPORTANT for stability!)
+            # advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
+
             values = torch.tensor(values).to(self.actor.device)
+            
             for batch in batches:
                 batch_states = state_arr[batch]
             
@@ -263,15 +267,18 @@ class Agent():
                 self.critic.optimizer.zero_grad()
                 total_loss.backward()
 
-                # Check gradient flow periodically
-                if _ == 0 and len(batches) > 0:  # Only first epoch, first batch
-                    print(f"\nChecking Actor network:")
-                    check_gradient_flow(self.actor)
-                    print(f"\nChecking Critic network:")
-                    check_gradient_flow(self.critic)
-                
+                torch.nn.utils.clip_grad_norm_(self.actor.parameters(), max_norm=0.5)
+                torch.nn.utils.clip_grad_norm_(self.critic.parameters(), max_norm=0.5)
+
                 self.actor.optimizer.step()
                 self.critic.optimizer.step()
+
+            # Check gradient flow periodically
+            if _ == 0 and len(batches) > 0:  # Only first epoch, first batch
+                print(f"\nChecking Actor network:")
+                check_gradient_flow(self.actor)
+                print(f"\nChecking Critic network:")
+                check_gradient_flow(self.critic)
 
         self.memory.clear_memory()
 
