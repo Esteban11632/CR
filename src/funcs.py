@@ -8,6 +8,7 @@ from fastai.vision.all import *
 import pathlib
 import platform
 from troop_cards import cards
+from rfdetr import RFDETRMedium
 
 # CRITICAL: Force CPU-only mode for PaddleOCR to prevent CUDA conflicts with PyTorch
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
@@ -21,14 +22,15 @@ class actions:
 
         self.models_dir = os.path.join(self.parent_dir, 'models')
         self.card_model_path = os.path.join(self.models_dir, 'card_model.pkl')
+        self.battlefield_model_path = os.path.join(self.models_dir, 'battlefield_model.pth')
         
         # Simplest/fastest config for reading tower health numbers
-        """self.ocr = PaddleOCR(
+        self.ocr = PaddleOCR(
             use_doc_orientation_classify=False,
             use_doc_unwarping=False,
             use_textline_orientation=False,
             lang='en'
-        )"""
+        )
 
         self.num_cards = 4
         self.grid_x = 18
@@ -63,7 +65,8 @@ class actions:
         self.card_model = self.__setup_card_roboflow()
     
     def __setup_roboflow(self):
-        pass
+        model = RFDETRMedium(pretrain_weights=self.battlefield_model_path)
+        return model
 
     def __setup_card_roboflow(self):
         # Fix for Windows/Linux path compatibility
@@ -165,8 +168,49 @@ class actions:
         
         return card, x, y
     
-    def get_tower_health(self, region):
+    def get_battlefield(self, screenshot_path):
+        preds = self.rf_model.predict(screenshot_path, threshold=0.1)
+        allies = []
+        enemies = []
 
+        for i, result in enumerate(preds):
+            if result[3] < 75:
+                allies.append(result)
+            else:
+                enemies.append(result)
+                
+        allies_grid = self.troops_to_grid(self.pixel_to_grid(allies))
+        enemies_grid = self.troops_to_grid(self.pixel_to_grid(enemies))
+        return allies_grid, enemies_grid
+    
+    def pixel_to_grid(self, preds):
+        grid_preds = []
+        for i, result in enumerate(preds):
+            class_id = result[3] / 145
+            x = round(((result[0][0].tolist() + result[0][2].tolist()) / 2) / 27.555555556) - 1
+            y = round(((result[0][1].tolist() + result[0][3].tolist()) / 2) / 24.607142857) - 1
+            x = max(0, min(x, 17))
+            y = max(0, min(y, 28))
+            grid_preds.append({"class_id": class_id, "x": x, "y": y})
+            print(f"Detection {i}: class_id={class_id}, x={x}, y={y}, bbox={result[0]}")
+        return grid_preds
+
+    def troops_to_grid(self, troops):
+        battlefield = np.zeros((29, 18), dtype=np.float32)
+
+        for troop in troops:
+            class_id = troop["class_id"]
+            x = troop["x"]
+            y = troop["y"]
+            # Check if coordinates are valid
+            if 0 <= y < 28 and 0 <= x < 17:
+                battlefield[y][x] = class_id
+                print(f"Added class {int(class_id * 145)} at grid position ({y}, {x})")
+            else:
+                print(f"Warning: Invalid coordinates ({y}, {x}) for class {int(class_id * 145)}")
+        return battlefield
+    
+    def get_tower_health(self, region):
         # Get the tower screenshot
         tower = pyautogui.screenshot(region=region)
         tower = np.array(tower)
@@ -377,9 +421,9 @@ class actions:
         
 
 # Get parent directory (one level up from src)
-parent_dir = os.path.dirname(os.path.dirname(__file__))
+"""parent_dir = os.path.dirname(os.path.dirname(__file__))
 screenshot_dir = os.path.join(parent_dir, 'screenshots')
-os.makedirs(screenshot_dir, exist_ok=True)
+os.makedirs(screenshot_dir, exist_ok=True)"""
 
 """while True:
     elixir = actions().count_elixir()
@@ -402,5 +446,5 @@ for i in tower_pixel_positions:
 
 # while True:
 #     print(action.get_tower_health(tower_pixel_positions[0]))
-cards = actions().capture_individual_cards()
-print(cards)
+"""cards = actions().capture_individual_cards()
+print(cards)"""

@@ -86,17 +86,15 @@ class Game:
 
     def get_state(self):
 
-        # confidences = [0.8, 0.7, 0.6] # 80%, 70%, 60% confidence levels
         # grid_region = (666, 46, 544, 780)
         # Grid 18x28
         # 0: friendly, 1: enemy, 2: towers
-        battlefield = np.zeros((3, 28, 18), dtype=np.int32)
+        battlefield = np.zeros((3, 29, 18), dtype=np.float32)
 
-        # Get number of enemies
-        self.actions.capture_area(os.path.join(self.screenshot_dir, "enemies.png"))
-
-        # Get number of allies
-        self.actions.capture_area(os.path.join(self.screenshot_dir, "allies.png"))
+        self.actions.capture_area(os.path.join(self.screenshot_dir, "field.png"))
+        allies_grid, enemies_grid = self.actions.get_battlefield(os.path.join(self.screenshot_dir, "field.png"))
+        battlefield[0] = allies_grid
+        battlefield[1] = enemies_grid
 
         # Get tower health
         for i in range(4):
@@ -104,31 +102,14 @@ class Game:
             if tower_health != "No text" and tower_health < 4500:
                 battlefield[2][self.tower_grid_positions[i][0]][self.tower_grid_positions[i][1]] = tower_health / 10000
 
-        # Identify troops and locations in grid with roboflow
-
-        # Get troop positions
-        # Using the musketeer as test
-
         # Get elixir
         elixir = self.actions.count_elixir() / 10.0
 
         # Get the current cards
         current_cards = self.actions.capture_individual_cards()
 
-        # Use roboflow to identify the cards
-        # Get the elixir and cards
-        # Then convert it to an array of 8 values
-        # Normalize the values to be between 0 and 1 -> id / 100 and elixir / 10
-        # return the state
-        """state = {
+        state = {
             'battlefield': battlefield,
             'elixir': elixir,
             'cards': current_cards
-        }"""
-        # return state
-
-"""x = torch.zeros(2017)
-x[18] = 20
-x[2016] = 10
-
-Game().play_step(18)"""
+        }
