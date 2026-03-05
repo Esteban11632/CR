@@ -186,7 +186,7 @@ class actions:
     def pixel_to_grid(self, preds):
         grid_preds = []
         for i, result in enumerate(preds):
-            class_id = result[3] / 145
+            class_id = result[3] / 154
             x = round(((result[0][0].tolist() + result[0][2].tolist()) / 2) / 27.555555556) - 1
             y = round(((result[0][1].tolist() + result[0][3].tolist()) / 2) / 24.607142857) - 1
             x = max(0, min(x, 17))
