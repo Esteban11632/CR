@@ -5,6 +5,7 @@ import numpy as np
 
 class Game:
     def __init__(self):
+        print("Initializing game")
         self.actions = actions()
 
         self.parent_dir = os.path.dirname(os.path.dirname(__file__))
@@ -17,6 +18,7 @@ class Game:
         self.tower_grid_positions = [(22, 3), (22, 14), (5, 3), (5, 14)] # left ally tower, right ally tower, left enemy tower, right enemy tower
 
     def reset(self):
+        print("Resetting")
         self.actions.click_battle_start()
         time.sleep(7.5)
 
@@ -24,11 +26,13 @@ class Game:
         return self.get_state()
     
     def exit(self):
+        print("Exiting")
         self.actions.return_to_menu()
         time.sleep(6)
         print("Exited")
     
     def step(self, action, state):
+        print("Stepping")
         # Get the action from the model
         card, x, y = self.actions.get_action(action)
 
@@ -48,6 +52,7 @@ class Game:
         return new_state, reward, done
     
     def compute_reward(self, old_state, new_state):
+        print("Computing reward")
 
         # Get the tower health
         reward = 0.0
@@ -85,7 +90,7 @@ class Game:
         return reward, done
 
     def get_state(self):
-
+        print("Getting state")
         # grid_region = (666, 46, 544, 780)
         # Grid 18x28
         # 0: friendly, 1: enemy, 2: towers
@@ -113,3 +118,4 @@ class Game:
             'elixir': elixir,
             'cards': current_cards
         }
+        return state

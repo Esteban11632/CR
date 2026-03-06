@@ -15,6 +15,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
 class actions:
     def __init__(self):
+        print("Initializing actions")
         self.parent_dir = os.path.dirname(os.path.dirname(__file__))
         # Go up one directory (from src to CR) then to main_images
         self.images_folder = os.path.join(self.parent_dir, 'main_images')
@@ -89,6 +90,7 @@ class actions:
         return learn
     
     def capture_area(self, save_path):
+        print("Capturing area")
         screenshot = pyautogui.screenshot(region=(self.TOP_LEFT_X, self.TOP_LEFT_Y, self.WIDTH, self.HEIGHT))
         screenshot.save(save_path)
 
@@ -144,6 +146,7 @@ class actions:
         screenshot.save(save_path)
 
     def grid_to_pixel(self, row, col):
+        print("Converting grid to pixel")
         x = 723 + col * 26
         if row < 13:
             y = 152 + row * 20
@@ -152,7 +155,7 @@ class actions:
         return x, y
     
     def get_action(self, action):
-
+        print("Getting action")
         if action == 0:
         # Special case: do nothing
             return None, None, None
@@ -169,21 +172,25 @@ class actions:
         return card, x, y
     
     def get_battlefield(self, screenshot_path):
+        print("Getting battlefield")
         preds = self.rf_model.predict(screenshot_path, threshold=0.1)
         allies = []
         enemies = []
 
+        print("Putting troops into lists")
         for i, result in enumerate(preds):
             if result[3] < 75:
                 allies.append(result)
             else:
                 enemies.append(result)
                 
+        print("Getting grid positions")
         allies_grid = self.troops_to_grid(self.pixel_to_grid(allies))
         enemies_grid = self.troops_to_grid(self.pixel_to_grid(enemies))
         return allies_grid, enemies_grid
     
     def pixel_to_grid(self, preds):
+        print("Converting pixel to grid")
         grid_preds = []
         for i, result in enumerate(preds):
             class_id = result[3] / 154
@@ -196,6 +203,7 @@ class actions:
         return grid_preds
 
     def troops_to_grid(self, troops):
+        print("Converting troops to grid")
         battlefield = np.zeros((29, 18), dtype=np.float32)
 
         for troop in troops:
@@ -211,6 +219,7 @@ class actions:
         return battlefield
     
     def get_tower_health(self, region):
+        print("Getting tower health")
         # Get the tower screenshot
         tower = pyautogui.screenshot(region=region)
         tower = np.array(tower)
@@ -241,6 +250,7 @@ class actions:
         return tower_health
     
     def capture_card_area(self, save_path):
+        print("Capturing card area")
         """Capture screenshot of card area"""
         screenshot = pyautogui.screenshot(region=(
             self.CARD_BAR_X, 
@@ -251,6 +261,7 @@ class actions:
         screenshot.save(save_path)
     
     def capture_individual_cards(self):
+        print("Capturing individual cards")
         """Capture and split card bar into individual card images"""
         screenshot = pyautogui.screenshot(region=(
             self.CARD_BAR_X, 
@@ -298,6 +309,7 @@ class actions:
         return current_cards
     
     def count_elixir(self):
+        print("Counting elixir")
         # Elixir RGB values
         target = (204, 32, 210)
         tolerance = 80
@@ -315,6 +327,7 @@ class actions:
         return count
     
     def update_card_positions(self, detections):
+        print("Updating card positions")
         """
         Update card positions based on detection results
         detections: list of dictionaries with 'class' and 'x' position
@@ -384,6 +397,7 @@ class actions:
                 print(f"Error locating OK button: {str(e)}")
         
     def detect_game_end(self):
+        print("Detecting game end")
         done = False
         winner_img = os.path.join(self.images_folder, "Winner.png")
         print(f"\nLooking for Winner.png at: {winner_img}")

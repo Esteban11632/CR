@@ -11,7 +11,9 @@ if __name__ == '__main__':
     batch_size = 5
     n_epochs = 4
     alpha = 0.0003
+    print("Initializing agent")
     agent = Agent(n_actions=n_actions, batch_size=batch_size, n_epochs=n_epochs, alpha=alpha)
+    print("Loading models")
     training_state = agent.load_models()
     
     if training_state:
@@ -41,23 +43,35 @@ if __name__ == '__main__':
         done = False
         score = 0
         while not done:
+            print("Choosing action")
             action, prob, val = agent.choose_action(state['battlefield'], state['elixir'], state['cards'])
+            print("Choosing state")
             new_state, reward, done = env.step(action, state)
+            print("Updating step count")
             n_steps += 1
+            print("Score updating")
             score += reward
+            print("Remembering")
             agent.remember(state, action, prob, val, reward, done)
+            print("Learning")
             if n_steps % N == 0:
                 agent.learn()
                 learn_iters += 1
                 start_episode += 1
+                print("Learned")
+            print("Updating state")
             state = new_state
+        print("Exiting")
         env.exit()
+        print("Scoring")
         score_history.append(score)
         avg_score = np.mean(score_history[-100:])
-
+        print("Updating average score")
         if avg_score > best_score:
             best_score = avg_score
+            print("Saving models")
             agent.save_models(best_score=best_score, episode=start_episode)
+            print("Models saved")
 
         print('episode', i, 'score %.1f' % score, 'avg score %.1f' % avg_score,
                 'time_steps', n_steps, 'learning_steps', learn_iters)
