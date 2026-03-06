@@ -20,7 +20,7 @@ class Game:
     def reset(self):
         print("Resetting")
         self.actions.click_battle_start()
-        time.sleep(7.5)
+        time.sleep(9)
 
         # Return initial state
         return self.get_state()
